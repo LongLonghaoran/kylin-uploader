@@ -3,20 +3,132 @@
 
 openapi: 3.0.3
 info:
-    title: Greeter API
-    description: The greeting service definition.
+    title: Chunk API
     version: 0.0.1
 paths:
-    /helloworld/{name}:
+    /api/v1/check_chunk_exists:
         get:
             tags:
-                - Greeter
-                - subgroup
-            description: Sends a greeting
-            operationId: Greeter_SayHello
+                - Chunk
+            description: 检查分片是否存在
+            operationId: Chunk_CheckChunkExists
             parameters:
-                - name: name
+                - name: upid
+                  in: query
+                  description: 上传id
+                  schema:
+                    type: string
+                - name: num
+                  in: query
+                  description: 分片序号
+                  schema:
+                    type: integer
+                    format: int32
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CheckChunkExistsReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /api/v1/check_file_exists:
+        get:
+            tags:
+                - Chunk
+            description: 检查文件是否存在
+            operationId: Chunk_CheckFileExists
+            parameters:
+                - name: filename
+                  in: query
+                  description: 文件名
+                  schema:
+                    type: string
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CheckFileExistReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /api/v1/uploaders:
+        post:
+            tags:
+                - Chunk
+            description: 创建一次上传
+            operationId: Chunk_CreateUpload
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/CreateUploadRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CreateUploadReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /api/v1/uploaders/{upid}:
+        put:
+            tags:
+                - Chunk
+            description: 针对一次上传对象来上传分片内容
+            operationId: Chunk_UploadChunk
+            parameters:
+                - name: upid
                   in: path
+                  description: 上传的upid
+                  required: true
+                  schema:
+                    type: string
+            requestBody:
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UploadChunkRequest'
+                required: true
+            responses:
+                "200":
+                    description: OK
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UploadChunkReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
+    /api/v1/uploaders/{upid}/done:
+        get:
+            tags:
+                - Chunk
+            description: 上传完成
+            operationId: Chunk_DoneUpload
+            parameters:
+                - name: upid
+                  in: path
+                  description: 上传id
                   required: true
                   schema:
                     type: string
@@ -26,14 +138,101 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/helloworld.v1.HelloReply'
+                                $ref: '#/components/schemas/DoneUploadReply'
+                default:
+                    description: Default error response
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Status'
 components:
     schemas:
-        helloworld.v1.HelloReply:
+        CheckChunkExistsReply:
             type: object
             properties:
+                exists:
+                    type: boolean
+        CheckFileExistReply:
+            type: object
+            properties:
+                exists:
+                    type: boolean
+                    description: 是否存在
+                path:
+                    type: string
+                    description: 存在则返回路径
+        CreateUploadReply:
+            type: object
+            properties:
+                uploadPath:
+                    type: string
+                    description: 之后用于上传分片的路径
+        CreateUploadRequest:
+            type: object
+            properties:
+                filename:
+                    type: string
+                    description: 文件名
+                totalCount:
+                    type: integer
+                    description: 总分片数
+                    format: int32
+                totalSize:
+                    type: integer
+                    description: 总容量
+                    format: int32
+                md5sum:
+                    type: string
+                    description: md5校验和
+        DoneUploadReply:
+            type: object
+            properties:
+                path:
+                    type: string
+                    description: 返回的文件路径
+        GoogleProtobufAny:
+            type: object
+            properties:
+                '@type':
+                    type: string
+                    description: The type of the serialized message.
+            additionalProperties: true
+            description: Contains an arbitrary serialized message along with a @type that describes the type of the serialized message.
+        Status:
+            type: object
+            properties:
+                code:
+                    type: integer
+                    description: The status code, which should be an enum value of [google.rpc.Code][google.rpc.Code].
+                    format: int32
                 message:
                     type: string
-            description: The response message containing the greetings
+                    description: A developer-facing error message, which should be in English. Any user-facing error message should be localized and sent in the [google.rpc.Status.details][google.rpc.Status.details] field, or localized by the client.
+                details:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/GoogleProtobufAny'
+                    description: A list of messages that carry the error details.  There is a common set of message types for APIs to use.
+            description: 'The `Status` type defines a logical error model that is suitable for different programming environments, including REST APIs and RPC APIs. It is used by [gRPC](https://github.com/grpc). Each `Status` message contains three pieces of data: error code, error message, and error details. You can find out more about this error model and how to work with it in the [API Design Guide](https://cloud.google.com/apis/design/errors).'
+        UploadChunkReply:
+            type: object
+            properties: {}
+        UploadChunkRequest:
+            type: object
+            properties:
+                upid:
+                    type: string
+                    description: 上传的upid
+                num:
+                    type: integer
+                    description: 当前块的序号
+                    format: int32
+                size:
+                    type: integer
+                    description: 当前块的大小
+                    format: int32
+                chunk:
+                    type: string
+                    description: 当前块的数据
 tags:
-    - name: Greeter
+    - name: Chunk

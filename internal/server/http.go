@@ -1,7 +1,8 @@
 package server
 
 import (
-	v1 "kylin-uploader/api/helloworld/v1"
+	// v1 "kylin-uploader/api/helloworld/v1"
+	v1 "kylin-uploader/api/v1"
 	"kylin-uploader/internal/conf"
 	"kylin-uploader/internal/service"
 
@@ -11,7 +12,7 @@ import (
 )
 
 // NewHTTPServer new a HTTP server.
-func NewHTTPServer(c *conf.Server, greeter *service.GreeterService, logger log.Logger) *http.Server {
+func NewHTTPServer(c *conf.Server, chunk *service.ChunkService, logger log.Logger) *http.Server {
 	var opts = []http.ServerOption{
 		http.Middleware(
 			recovery.Recovery(),
@@ -27,6 +28,7 @@ func NewHTTPServer(c *conf.Server, greeter *service.GreeterService, logger log.L
 		opts = append(opts, http.Timeout(c.Http.Timeout.AsDuration()))
 	}
 	srv := http.NewServer(opts...)
-	v1.RegisterGreeterHTTPServer(srv, greeter)
+	// v1.RegisterGreeterHTTPServer(srv, greeter)
+	v1.RegisterChunkHTTPServer(srv, chunk)
 	return srv
 }

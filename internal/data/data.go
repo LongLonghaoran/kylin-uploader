@@ -8,11 +8,17 @@ import (
 )
 
 // ProviderSet is data providers.
-var ProviderSet = wire.NewSet(NewData, NewGreeterRepo)
+var ProviderSet = wire.NewSet(NewData, NewChunkRepo)
+
+type DB interface {
+	First()
+	List()
+}
 
 // Data .
 type Data struct {
 	// TODO wrapped database client
+
 }
 
 // NewData .

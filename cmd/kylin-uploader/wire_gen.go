@@ -7,14 +7,13 @@
 package main
 
 import (
+	"github.com/go-kratos/kratos/v2"
+	"github.com/go-kratos/kratos/v2/log"
 	"kylin-uploader/internal/biz"
 	"kylin-uploader/internal/conf"
 	"kylin-uploader/internal/data"
 	"kylin-uploader/internal/server"
 	"kylin-uploader/internal/service"
-
-	"github.com/go-kratos/kratos/v2"
-	"github.com/go-kratos/kratos/v2/log"
 )
 
 // Injectors from wire.go:
@@ -25,11 +24,11 @@ func wireApp(confServer *conf.Server, confData *conf.Data, logger log.Logger) (*
 	if err != nil {
 		return nil, nil, err
 	}
-	greeterRepo := data.NewGreeterRepo(dataData, logger)
-	greeterUsecase := biz.NewGreeterUsecase(greeterRepo, logger)
-	greeterService := service.NewGreeterService(greeterUsecase)
-	grpcServer := server.NewGRPCServer(confServer, greeterService, logger)
-	httpServer := server.NewHTTPServer(confServer, greeterService, logger)
+	chunkRepo := data.NewChunkRepo(dataData, logger)
+	chunkUsecase := biz.NewChunkUsecase(chunkRepo, logger)
+	chunkService := service.NewChunkService(chunkUsecase)
+	grpcServer := server.NewGRPCServer(confServer, chunkService, logger)
+	httpServer := server.NewHTTPServer(confServer, chunkService, logger)
 	app := newApp(logger, grpcServer, httpServer)
 	return app, func() {
 		cleanup()
