@@ -5,10 +5,11 @@ server:
   grpc:
     addr: 0.0.0.0:9000
     timeout: 1s
+  chunk_basic_dir: "/tmp/chunkdir"
 data:
   database:
     driver: mysql
-    source: root:root@tcp(127.0.0.1:3306)/test
+    source: "root:@tcp(127.0.0.1:3306)/kylinuploader?parseTime=true"
   redis:
     addr: 127.0.0.1:6379
     read_timeout: 0.2s

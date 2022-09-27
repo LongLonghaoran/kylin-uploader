@@ -69,6 +69,7 @@ message UploadChunkRequest {
 	string chunk = 4; 
 }
 message UploadChunkReply {
+	int32  nextnum = 2;
 }
 
 message DoneUploadRequest {

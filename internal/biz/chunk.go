@@ -2,26 +2,36 @@ package biz
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"path"
 
 	pb "kylin-uploader/api/v1"
+	v1 "kylin-uploader/api/v1"
+	"kylin-uploader/internal/conf"
 
 	"github.com/go-kratos/kratos/v2/log"
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // Chunk is a Chunk model.
 type Chunk struct {
-	Upid string
-	Num  int32
-	Size int32
-	Path string
+	gorm.Model
+	UploadingID uint
+	Num         int32
+	Size        int32
+	Path        string
+	Uploading   Uploading
 }
 
 // ChunkRepo is a Greater repo.
 type ChunkRepo interface {
-	CreateUpload(context.Context, *Uploading) (*Uploading, error)
-	FindChunk(context.Context, *pb.UploadChunkRequest) (*Chunk, error)
+	CreateUpload(*Uploading, string) (*Uploading, error)
+	FindChunk(*pb.UploadChunkRequest) (*Chunk, *Uploading, error)
+	UploadChunk(*pb.UploadChunkRequest, string) (*Chunk, error)
+	DoneUpload(*pb.DoneUploadRequest, string) (*Uploading, error)
 }
 
 // ChunkUsecase is a Chunk usecase.
@@ -30,32 +40,70 @@ type ChunkUsecase struct {
 	log  *log.Helper
 }
 
+var chunkBasicDir string
+
 // NewChunkUsecase new a Chunk usecase.
-func NewChunkUsecase(repo ChunkRepo, logger log.Logger) *ChunkUsecase {
+func NewChunkUsecase(repo ChunkRepo, s *conf.Server, logger log.Logger) *ChunkUsecase {
+	chunkBasicDir = s.ChunkBasicDir
 	return &ChunkUsecase{repo: repo, log: log.NewHelper(logger)}
 }
 
 // CreateChunk creates a Chunk, and returns the new Chunk.
-func (uc *ChunkUsecase) CreateUpload(ctx context.Context, g *Uploading) (*Uploading, error) {
-	log.Infof("CreateUpload: ", g)
-	return uc.repo.CreateUpload(ctx, g)
+func (uc *ChunkUsecase) CreateUpload(req *pb.CreateUploadRequest) (*Uploading, error) {
+	uploading := Uploading{
+		Upid:       uuid.NewString(),
+		Filename:   req.Filename,
+		TotalSize:  req.TotalSize,
+		TotalCount: req.TotalCount,
+		MD5SUM:     req.Md5Sum,
+	}
+
+	return uc.repo.CreateUpload(&uploading, chunkBasicDir)
 }
 
-func (uc *ChunkUsecase) UploadChunk(ctx context.Context, req *pb.UploadChunkRequest) error {
-	log.Infof("UploadChunk: upid: %s, num: %s", req.Upid, req.Num)
+func (uc *ChunkUsecase) UploadChunk(ctx context.Context, req *pb.UploadChunkRequest) (int32, error) {
 	// find uploading
-	_, err := uc.repo.FindChunk(ctx, req)
+	chunk, uploading, err := uc.repo.FindChunk(req)
 	if err == nil {
-		log.Infof("File exists! %v", req.Upid)
-		return nil
+		log.Infof("chunk exists! %v", req.Upid)
+
+		if chunk.Num < uploading.TotalCount {
+			return chunk.Num + 1, nil
+		} else {
+			return -1, nil
+		}
 	}
-	// create file
-	f, err := os.OpenFile("/tmp/chunkdir/"+req.Upid+"."+fmt.Sprint(req.Num), os.O_CREATE|os.O_RDWR|os.O_APPEND, 0666)
+	chunk, err = uc.repo.UploadChunk(req, chunkBasicDir)
+	fmt.Println("创建完成......chunk.Num", chunk.Num)
 	if err != nil {
-		log.Errorf("Failed to Create new file!%v", err)
-		return err
+		log.Errorf("Failed to Upload chunk!%v", err)
+		return 0, err
 	}
-	// copy stream to file
-	f.WriteString(req.Chunk)
-	return nil
+	if chunk.Num < uploading.TotalCount {
+		return chunk.Num + 1, nil
+	} else {
+		return -1, nil
+	}
+}
+func (uc *ChunkUsecase) DoneUpload(ctx context.Context, req *pb.DoneUploadRequest) (*Uploading, error) {
+	uploading, err := uc.repo.DoneUpload(req, chunkBasicDir)
+	if err != nil {
+		return nil, err
+	}
+	return uploading, nil
+}
+
+func (uc *ChunkUsecase) CheckFileExists(req *pb.CheckFileExistRequest) (string, error) {
+	if _, err := os.Stat(path.Join(chunkBasicDir, req.Filename)); errors.Is(err, os.ErrNotExist) {
+		return "", err
+	}
+	return path.Join(chunkBasicDir, req.Filename), nil
+}
+
+func (uc *ChunkUsecase) CheckChunkExists(req *pb.CheckChunkExistsRequest) (bool, error) {
+	_, _, err := uc.repo.FindChunk(&v1.UploadChunkRequest{Upid: req.Upid, Num: req.Num})
+	if err != nil {
+		return false, err
+	}
+	return true, nil
 }

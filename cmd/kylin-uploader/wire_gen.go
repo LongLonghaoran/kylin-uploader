@@ -20,12 +20,12 @@ import (
 
 // wireApp init kratos application.
 func wireApp(confServer *conf.Server, confData *conf.Data, logger log.Logger) (*kratos.App, func(), error) {
-	dataData, cleanup, err := data.NewData(confData, logger)
+	dataData, cleanup, err := data.NewData(confData, confServer, logger)
 	if err != nil {
 		return nil, nil, err
 	}
 	chunkRepo := data.NewChunkRepo(dataData, logger)
-	chunkUsecase := biz.NewChunkUsecase(chunkRepo, logger)
+	chunkUsecase := biz.NewChunkUsecase(chunkRepo, confServer, logger)
 	chunkService := service.NewChunkService(chunkUsecase)
 	grpcServer := server.NewGRPCServer(confServer, chunkService, logger)
 	httpServer := server.NewHTTPServer(confServer, chunkService, logger)
