@@ -1,0 +1,7 @@
+#创建一个基于5.7.30版本的MySql
+FROM mysql
+
+EXPOSE 3306
+
+ENV MYSQL_ALLOW_EMPTY_PASSWORD=yes MYSQL_DATABASE=kylinuploader
+

@@ -9,7 +9,7 @@ server:
 data:
   database:
     driver: mysql
-    source: "root:@tcp(127.0.0.1:3306)/kylinuploader?parseTime=true"
+    source: "root:@tcp(172.20.121.97:33306)/kylinuploader?parseTime=true"
   redis:
     addr: 127.0.0.1:6379
     read_timeout: 0.2s
