@@ -28,7 +28,7 @@ func NewHTTPServer(c *conf.Server, chunk *service.ChunkService, logger log.Logge
 			recovery.Recovery(),
 		),
 	}
-	chunkBasicDir = c.ChunkBasicDir
+	chunkBasicDir = c.Basicdir
 	if c.Http.Network != "" {
 		opts = append(opts, http.Network(c.Http.Network))
 	}
@@ -54,10 +54,10 @@ func SendFile(ctx http.Context) error {
 	req := ctx.Request()
 	vars := mux.Vars(req)
 	w := ctx.Response()
+	fmt.Println("chunkbasic dir: ", chunkBasicDir)
 	f, _ := os.OpenFile(path.Join(chunkBasicDir, vars["path"]), os.O_RDONLY, 0666)
 	fileHeader := make([]byte, 512) // 512 bytes is sufficient for http.DetectContentType() to work
 	f.Read(fileHeader)              // read the first 512 bytes from the updateFile
-	fmt.Println(fileHeader)
 	fileType := ghttp.DetectContentType(fileHeader)
 	fileInfo, _ := f.Stat()
 	fileSize := fileInfo.Size()

@@ -3,7 +3,6 @@ package biz
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"path"
 
@@ -44,7 +43,7 @@ var chunkBasicDir string
 
 // NewChunkUsecase new a Chunk usecase.
 func NewChunkUsecase(repo ChunkRepo, s *conf.Server, logger log.Logger) *ChunkUsecase {
-	chunkBasicDir = s.ChunkBasicDir
+	chunkBasicDir = s.Basicdir
 	return &ChunkUsecase{repo: repo, log: log.NewHelper(logger)}
 }
 
@@ -74,7 +73,6 @@ func (uc *ChunkUsecase) UploadChunk(ctx context.Context, req *pb.UploadChunkRequ
 		}
 	}
 	chunk, err = uc.repo.UploadChunk(req, chunkBasicDir)
-	fmt.Println("创建完成......chunk.Num", chunk.Num)
 	if err != nil {
 		log.Errorf("Failed to Upload chunk!%v", err)
 		return 0, err

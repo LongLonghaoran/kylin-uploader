@@ -66,7 +66,7 @@ message UploadChunkRequest {
 	//当前块的大小
 	int32 size = 3; 
 	//当前块的数据
-	string chunk = 4; 
+	bytes chunk = 4; 
 }
 message UploadChunkReply {
 	int32  nextnum = 2;

@@ -1,6 +1,7 @@
 package data
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -30,11 +31,20 @@ func NewChunkRepo(data *Data, logger log.Logger) biz.ChunkRepo {
 }
 
 func (r *chunkRepo) CreateUpload(g *biz.Uploading, chunkBasicDir string) (*biz.Uploading, error) {
-	// 创建一条上传记录
-	r.data.DB.Create(g)
-	// create file & chunk record
-	os.Mkdir(path.Join(chunkBasicDir, g.Upid), 0766)
-	return g, nil
+	// 先按照文件名或者md5checksum去数据库查找文件,找到的话直接返回那条记录
+	uploading := biz.Uploading{}
+	result := r.data.DB.First(&uploading, "Filename = ? or md5_sum = ?", g.Filename, g.MD5SUM)
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		// 创建一条上传记录
+		r.data.DB.Create(g)
+		// create file & chunk record
+		os.Mkdir(path.Join(chunkBasicDir, g.Upid), 0766)
+		return g, nil
+	} else if result.Error != nil {
+		return nil, result.Error
+	} else {
+		return &uploading, nil
+	}
 }
 
 func (r *chunkRepo) FindChunk(req *pb.UploadChunkRequest) (*biz.Chunk, *biz.Uploading, error) {
@@ -52,30 +62,46 @@ func (r *chunkRepo) FindChunk(req *pb.UploadChunkRequest) (*biz.Chunk, *biz.Uplo
 func (r *chunkRepo) UploadChunk(req *pb.UploadChunkRequest, chunkBasicDir string) (*biz.Chunk, error) {
 	var uploading biz.Uploading
 	r.data.DB.First(&uploading, "Upid = ?", req.Upid)
-	chunk := biz.Chunk{
-		UploadingID: uint(uploading.ID),
-		Num:         req.Num,
-		Size:        req.Size,
-	}
-	err := r.data.DB.Transaction(func(tx *gorm.DB) error {
-		// create chunk record
-		result := r.data.DB.Create(&chunk)
-		if result.Error != nil {
-			return result.Error
+	// 必须接着上次上传序号的分片继续上传
+	if req.Num != uploading.CurrentNum+1 {
+		chunk := biz.Chunk{
+			UploadingID: uint(uploading.ID),
+			Num:         uploading.CurrentNum,
 		}
-		f, err := os.OpenFile(path.Join(chunkBasicDir, req.Upid, req.Upid+"."+fmt.Sprint(req.Num)), os.O_CREATE|os.O_RDWR|os.O_APPEND, 0666)
+		return &chunk, fmt.Errorf("........序号非法......%v:%v", uploading.CurrentNum, req.Num)
+	} else {
+		chunk := biz.Chunk{
+			UploadingID: uint(uploading.ID),
+			Num:         req.Num,
+			Size:        req.Size,
+			Path:        path.Join(chunkBasicDir, req.Upid, req.Upid+"."+fmt.Sprint(req.Num)),
+		}
+		err := r.data.DB.Transaction(func(tx *gorm.DB) error {
+			// create chunk record
+			result := r.data.DB.Create(&chunk)
+			if result.Error != nil {
+				return result.Error
+			}
+			f, err := os.OpenFile(path.Join(chunkBasicDir, req.Upid, req.Upid+"."+fmt.Sprint(req.Num)), os.O_CREATE|os.O_RDWR|os.O_APPEND, 0666)
+			if err != nil {
+				log.Errorf("failed to create new file!%v", err)
+				return err
+			}
+			// copy stream to file
+			f.Write(req.Chunk)
+			uploading.CurrentNum = uploading.CurrentNum + 1
+			result = r.data.DB.Save(uploading)
+			if result.Error != nil {
+				return result.Error
+			}
+			fmt.Println("创建完成......chunk.Num", chunk.Num)
+			return nil
+		})
 		if err != nil {
-			log.Errorf("failed to create new file!%v", err)
-			return err
+			return nil, err
 		}
-		// copy stream to file
-		f.WriteString(req.Chunk)
-		return nil
-	})
-	if err != nil {
-		return nil, err
+		return &chunk, nil
 	}
-	return &chunk, nil
 }
 
 func (r *chunkRepo) DoneUpload(req *pb.DoneUploadRequest, chunkBasicDir string) (*biz.Uploading, error) {
@@ -83,6 +109,9 @@ func (r *chunkRepo) DoneUpload(req *pb.DoneUploadRequest, chunkBasicDir string) 
 	var uploading biz.Uploading
 	var chunks []biz.Chunk
 	r.data.DB.First(&uploading, "upid = ?", req.Upid)
+	if uploading.CurrentNum == uploading.TotalCount {
+		return &uploading, nil
+	}
 	r.data.DB.Model(&uploading).Association("Chunks").Find(&chunks)
 	// 核对分片数
 	if int(uploading.TotalCount) != len(chunks) {

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"path"
 
 	pb "kylin-uploader/api/v1"
 	"kylin-uploader/internal/biz"
@@ -40,7 +41,7 @@ func (s *ChunkService) DoneUpload(ctx context.Context, req *pb.DoneUploadRequest
 		return nil, err
 	}
 	return &pb.DoneUploadReply{
-		Path: uploading.Path,
+		Path: path.Join("/files", uploading.Filename),
 	}, nil
 }
 func (s *ChunkService) CheckFileExists(ctx context.Context, req *pb.CheckFileExistRequest) (*pb.CheckFileExistReply, error) {

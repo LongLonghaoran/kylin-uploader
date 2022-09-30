@@ -237,5 +237,6 @@ components:
                 chunk:
                     type: string
                     description: 当前块的数据
+                    format: bytes
 tags:
     - name: Chunk
