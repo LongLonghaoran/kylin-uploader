@@ -22,4 +22,4 @@ EXPOSE 9000
 VOLUME /data/conf
 RUN mkdir /tmp/chunkdir
 
-CMD ["./app/kylin-uploader", "-conf", "/data/conf"]
+CMD ["/app/kylin-uploader", "-conf", "/data/conf"]

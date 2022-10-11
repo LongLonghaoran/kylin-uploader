@@ -109,7 +109,7 @@ func (r *chunkRepo) DoneUpload(req *pb.DoneUploadRequest, chunkBasicDir string) 
 	var uploading biz.Uploading
 	var chunks []biz.Chunk
 	r.data.DB.First(&uploading, "upid = ?", req.Upid)
-	if uploading.CurrentNum == uploading.TotalCount {
+	if uploading.CurrentNum == uploading.TotalCount && len(uploading.Path) != 0 {
 		return &uploading, nil
 	}
 	r.data.DB.Model(&uploading).Association("Chunks").Find(&chunks)
@@ -136,7 +136,7 @@ func (r *chunkRepo) DoneUpload(req *pb.DoneUploadRequest, chunkBasicDir string) 
 	uploading = biz.Uploading{
 		Path: path.Join(chunkBasicDir, uploading.Filename),
 	}
-	r.data.DB.Model(&biz.Uploading{}).Where("upid = ?", req.Upid).Update("path", path.Join(chunkBasicDir, req.Upid, uploading.Filename))
+	r.data.DB.Model(&biz.Uploading{}).Where("upid = ?", req.Upid).Update("path", uploading.Path)
 	return &uploading, nil
 }
 

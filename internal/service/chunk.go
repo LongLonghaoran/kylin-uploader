@@ -35,8 +35,7 @@ func (s *ChunkService) UploadChunk(ctx context.Context, req *pb.UploadChunkReque
 	}, nil
 }
 func (s *ChunkService) DoneUpload(ctx context.Context, req *pb.DoneUploadRequest) (*pb.DoneUploadReply, error) {
-	// s.uc.DoneUpload
-	uploading, err := s.uc.DoneUpload(ctx, req)
+	uploading, err := s.uc.DoneUpload(context.Background(), req)
 	if err != nil {
 		return nil, err
 	}
