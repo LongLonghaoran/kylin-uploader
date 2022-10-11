@@ -49,6 +49,10 @@ paths:
                   description: 文件名
                   schema:
                     type: string
+                - name: md5sum
+                  in: query
+                  schema:
+                    type: string
             responses:
                 "200":
                     description: OK

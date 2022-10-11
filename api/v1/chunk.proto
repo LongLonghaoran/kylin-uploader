@@ -84,6 +84,7 @@ message DoneUploadReply {
 message CheckFileExistRequest {
 	// 文件名
 	string filename = 1;
+	string md5sum = 2;
 }
 message CheckFileExistReply {
 	// 是否存在

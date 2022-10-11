@@ -2,8 +2,6 @@ package biz
 
 import (
 	"context"
-	"errors"
-	"os"
 	"path"
 
 	pb "kylin-uploader/api/v1"
@@ -31,6 +29,7 @@ type ChunkRepo interface {
 	FindChunk(*pb.UploadChunkRequest) (*Chunk, *Uploading, error)
 	UploadChunk(*pb.UploadChunkRequest, string) (*Chunk, error)
 	DoneUpload(*pb.DoneUploadRequest, string) (*Uploading, error)
+	FindUploader(string) (*Uploading, error)
 }
 
 // ChunkUsecase is a Chunk usecase.
@@ -92,10 +91,11 @@ func (uc *ChunkUsecase) DoneUpload(ctx context.Context, req *pb.DoneUploadReques
 }
 
 func (uc *ChunkUsecase) CheckFileExists(req *pb.CheckFileExistRequest) (string, error) {
-	if _, err := os.Stat(path.Join(chunkBasicDir, req.Filename)); errors.Is(err, os.ErrNotExist) {
+	uploading, err := uc.repo.FindUploader(req.Filename)
+	if err != nil {
 		return "", err
 	}
-	return path.Join(chunkBasicDir, req.Filename), nil
+	return path.Join("files", uploading.Filename), nil
 }
 
 func (uc *ChunkUsecase) CheckChunkExists(req *pb.CheckChunkExistsRequest) (bool, error) {

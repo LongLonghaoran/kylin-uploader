@@ -140,6 +140,15 @@ func (r *chunkRepo) DoneUpload(req *pb.DoneUploadRequest, chunkBasicDir string) 
 	return &uploading, nil
 }
 
+func (r *chunkRepo) FindUploader(filename string) (*biz.Uploading, error) {
+	var uploading biz.Uploading
+	result := r.data.DB.First(&uploading, "Filename = ?", filename)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return &uploading, nil
+}
+
 func RecursiveMergeChunk(chunkBasicDir string, chunkFileNames ...string) (finalName string, e error) {
 	// var maxMem int64 = 1 * 1024 * 1024 * 1024 // max memery: 1GB
 	if len(chunkFileNames) == 1 {
