@@ -1,16 +1,16 @@
 server:
   http:
     addr: 0.0.0.0:8000
-    timeout: 1s
+    timeout: 600s
   grpc:
     addr: 0.0.0.0:9000
-    timeout: 1s
+    timeout: 600s
   basicdir: "/tmp/chunkdir"
 data:
   database:
     driver: mysql
-    source: "root:@tcp(172.20.121.97:33306)/kylinuploader?parseTime=true"
+    source: "root:@tcp(172.20.121.97:3306)/kylinuploader?parseTime=true"
   redis:
-    addr: 127.0.0.1:6379
+    addr: 172.20.121.97:6379
     read_timeout: 0.2s
     write_timeout: 0.2s
