@@ -15,6 +15,7 @@ func NewGRPCServer(c *conf.Server, chunk *service.ChunkService, logger log.Logge
 	var opts = []grpc.ServerOption{
 		grpc.Middleware(
 			recovery.Recovery(),
+			Authenticate,
 		),
 	}
 	if c.Grpc.Network != "" {
