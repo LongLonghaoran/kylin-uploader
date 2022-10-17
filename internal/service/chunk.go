@@ -40,7 +40,7 @@ func (s *ChunkService) DoneUpload(ctx context.Context, req *pb.DoneUploadRequest
 		return nil, err
 	}
 	return &pb.DoneUploadReply{
-		Path: path.Join("/files", uploading.Filename),
+		Path: path.Join("/files", uploading.Upid),
 	}, nil
 }
 func (s *ChunkService) CheckFileExists(ctx context.Context, req *pb.CheckFileExistRequest) (*pb.CheckFileExistReply, error) {

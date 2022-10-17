@@ -29,7 +29,6 @@ func Authenticate(m middleware.Handler) middleware.Handler {
 	return func(ctx context.Context, req interface{}) (interface{}, error) {
 		header, ok := transport.FromServerContext(ctx)
 		if ok {
-			fmt.Println()
 			if header.RequestHeader().Get("Auth") == "61646d696e61646d696e" {
 				return m(ctx, req)
 			} else {
@@ -78,7 +77,7 @@ func SendFile(ctx http.Context) error {
 	vars := mux.Vars(req)
 	w := ctx.Response()
 	fmt.Println("chunkbasic dir: ", chunkBasicDir)
-	f, _ := os.OpenFile(path.Join(chunkBasicDir, vars["path"]), os.O_RDONLY, 0666)
+	f, _ := os.OpenFile(path.Join(chunkBasicDir, "files", vars["path"]), os.O_RDONLY, 0666)
 	fileHeader := make([]byte, 512) // 512 bytes is sufficient for http.DetectContentType() to work
 	f.Read(fileHeader)              // read the first 512 bytes from the updateFile
 	fileType := ghttp.DetectContentType(fileHeader)
