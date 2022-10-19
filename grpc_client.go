@@ -1,4 +1,4 @@
-package main
+package client
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"github.com/go-kratos/kratos/v2/transport/grpc"
 )
 
-func main() {
+func TestGrpc() {
 	conn, _ := grpc.DialInsecure(
 		context.Background(),
 		grpc.WithEndpoint("127.0.0.1:9000"),

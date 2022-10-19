@@ -2,6 +2,7 @@ package biz
 
 import (
 	"context"
+	"fmt"
 	"path"
 
 	pb "kylin-uploader/api/v1"
@@ -10,26 +11,16 @@ import (
 
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
-
-// Chunk is a Chunk model.
-type Chunk struct {
-	gorm.Model
-	UploadingID uint
-	Num         int32
-	Size        int32
-	Path        string
-	Uploading   Uploading
-}
 
 // ChunkRepo is a Greater repo.
 type ChunkRepo interface {
 	CreateUpload(*Uploading, string) (*Uploading, error)
-	FindChunk(*pb.UploadChunkRequest) (*Chunk, *Uploading, error)
+	FindChunk(*pb.UploadChunkRequest) (*Chunk, error)
 	UploadChunk(*pb.UploadChunkRequest, string) (*Chunk, error)
 	DoneUpload(*pb.DoneUploadRequest, string) (*Uploading, error)
-	FindUploader(string) (*Uploading, error)
+	FindUploadingByUpid(upid string) (*Uploading, error)
+	FindUploadingByFilename(filename, md5sum, chunkBasicDir string) (*Uploading, error)
 }
 
 // ChunkUsecase is a Chunk usecase.
@@ -61,7 +52,11 @@ func (uc *ChunkUsecase) CreateUpload(req *pb.CreateUploadRequest) (*Uploading, e
 
 func (uc *ChunkUsecase) UploadChunk(ctx context.Context, req *pb.UploadChunkRequest) (int32, error) {
 	// find uploading
-	chunk, uploading, err := uc.repo.FindChunk(req)
+	uploading, _ := uc.repo.FindUploadingByUpid(req.Upid)
+	if uploading == nil {
+		return -1, fmt.Errorf("uploading不存在")
+	}
+	chunk, err := uc.repo.FindChunk(req)
 	if err == nil {
 		log.Infof("chunk exists! %v", req.Upid)
 
@@ -73,7 +68,6 @@ func (uc *ChunkUsecase) UploadChunk(ctx context.Context, req *pb.UploadChunkRequ
 	}
 	chunk, err = uc.repo.UploadChunk(req, chunkBasicDir)
 	if err != nil {
-		log.Errorf("Failed to Upload chunk!%v", err)
 		return 0, err
 	}
 	if chunk.Num < uploading.TotalCount {
@@ -91,15 +85,15 @@ func (uc *ChunkUsecase) DoneUpload(ctx context.Context, req *pb.DoneUploadReques
 }
 
 func (uc *ChunkUsecase) CheckFileExists(req *pb.CheckFileExistRequest) (string, error) {
-	uploading, err := uc.repo.FindUploader(req.Filename)
+	uploading, err := uc.repo.FindUploadingByFilename(req.Filename, req.Md5Sum, chunkBasicDir)
 	if err != nil {
 		return "", err
 	}
-	return path.Join("files", uploading.Filename), nil
+	return path.Join("files", uploading.Upid), nil
 }
 
 func (uc *ChunkUsecase) CheckChunkExists(req *pb.CheckChunkExistsRequest) (bool, error) {
-	_, _, err := uc.repo.FindChunk(&v1.UploadChunkRequest{Upid: req.Upid, Num: req.Num})
+	_, err := uc.repo.FindChunk(&v1.UploadChunkRequest{Upid: req.Upid, Num: req.Num})
 	if err != nil {
 		return false, err
 	}

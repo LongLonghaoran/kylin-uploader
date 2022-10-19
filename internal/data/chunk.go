@@ -1,12 +1,13 @@
 package data
 
 import (
-	"errors"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
 	"sync"
 
 	"kylin-uploader/internal/biz"
@@ -14,7 +15,6 @@ import (
 	pb "kylin-uploader/api/v1"
 
 	"github.com/go-kratos/kratos/v2/log"
-	"gorm.io/gorm"
 )
 
 type chunkRepo struct {
@@ -31,75 +31,90 @@ func NewChunkRepo(data *Data, logger log.Logger) biz.ChunkRepo {
 }
 
 func (r *chunkRepo) CreateUpload(g *biz.Uploading, chunkBasicDir string) (*biz.Uploading, error) {
-	// 先按照文件名或者md5checksum去数据库查找文件,找到的话直接返回那条记录
-	uploading := biz.Uploading{}
-	result := r.data.DB.First(&uploading, "Filename = ? or md5_sum = ?", g.Filename, g.MD5SUM)
-	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		// 创建一条上传记录
-		r.data.DB.Create(g)
-		// create file & chunk record
-		os.Mkdir(path.Join(chunkBasicDir, g.Upid), 0766)
-		return g, nil
-	} else if result.Error != nil {
-		return nil, result.Error
-	} else {
-		return &uploading, nil
+	// 按照给定的filename,md5sum在所有json文件中查找指定的uploading是否存在
+	entries, err := os.ReadDir(filepath.Join(chunkBasicDir, "index", "Uploading"))
+	if err != nil {
+		return nil, err
 	}
-}
-
-func (r *chunkRepo) FindChunk(req *pb.UploadChunkRequest) (*biz.Chunk, *biz.Uploading, error) {
-	var uploading biz.Uploading
-	r.data.DB.First(&uploading, "Upid = ?", req.Upid)
-	var chunks []biz.Chunk
-	r.data.DB.Model(&uploading).Where("Num = ?", req.Num).Association("Chunks").Find(&chunks)
-	if len(chunks) == 0 {
-		return nil, &uploading, fmt.Errorf("chunk not exists %v", req.Upid)
-	} else {
-		return &chunks[0], &uploading, nil
-	}
-}
-
-func (r *chunkRepo) UploadChunk(req *pb.UploadChunkRequest, chunkBasicDir string) (*biz.Chunk, error) {
-	var uploading biz.Uploading
-	r.data.DB.First(&uploading, "Upid = ?", req.Upid)
-	// 必须接着上次上传序号的分片继续上传
-	if req.Num != uploading.CurrentNum+1 {
-		chunk := biz.Chunk{
-			UploadingID: uint(uploading.ID),
-			Num:         uploading.CurrentNum,
+	for _, entry := range entries {
+		up := biz.Uploading{}
+		if entry.IsDir() {
+			continue
 		}
-		return &chunk, fmt.Errorf("........序号非法......%v:%v", uploading.CurrentNum, req.Num)
-	} else {
-		chunk := biz.Chunk{
-			UploadingID: uint(uploading.ID),
-			Num:         req.Num,
-			Size:        req.Size,
-			Path:        path.Join(chunkBasicDir, req.Upid, req.Upid+"."+fmt.Sprint(req.Num)),
-		}
-		err := r.data.DB.Transaction(func(tx *gorm.DB) error {
-			// create chunk record
-			result := r.data.DB.Create(&chunk)
-			if result.Error != nil {
-				return result.Error
-			}
-			f, err := os.OpenFile(path.Join(chunkBasicDir, req.Upid, req.Upid+"."+fmt.Sprint(req.Num)), os.O_CREATE|os.O_RDWR|os.O_APPEND, 0666)
-			if err != nil {
-				log.Errorf("failed to create new file!%v", err)
-				return err
-			}
-			// copy stream to file
-			f.Write(req.Chunk)
-			uploading.CurrentNum = uploading.CurrentNum + 1
-			result = r.data.DB.Save(uploading)
-			if result.Error != nil {
-				return result.Error
-			}
-			fmt.Println("创建完成......chunk.Num", chunk.Num)
-			return nil
-		})
+		f, err := os.Open(filepath.Join(chunkBasicDir, "index", "Uploading", entry.Name()))
 		if err != nil {
 			return nil, err
 		}
+		result, err := ioutil.ReadAll(f)
+		if err != nil {
+			return nil, err
+		}
+		array := make([]interface{}, 0)
+		err = json.Unmarshal(result, &array)
+		if len(array) == 0 || err != nil {
+			continue
+		}
+		result, err = json.Marshal(array[0])
+		if err != nil {
+			return nil, err
+		}
+		json.Unmarshal(result, &up)
+		if up.Filename == g.Filename && up.MD5SUM == g.MD5SUM {
+			fmt.Println("uploading exists!", up.Filename, up.MD5SUM)
+			return &up, nil
+		}
+	}
+
+	// 不存在相同文件的情况
+	err = r.data.DB.Insert(*g)
+	if err != nil {
+		return nil, err
+	}
+	err = os.Mkdir(path.Join(chunkBasicDir, g.Upid), 0766)
+	if err != nil {
+		return nil, err
+	} else {
+		return g, nil
+	}
+}
+
+func (r *chunkRepo) FindChunk(req *pb.UploadChunkRequest) (*biz.Chunk, error) {
+	var chunk biz.Chunk
+	err := r.data.DB.Open(biz.Chunk{Upid: req.Upid}).Where("Num", "=", req.Num).First().AsEntity(&chunk)
+	if err != nil {
+		return nil, err
+	}
+	return &chunk, nil
+}
+
+func (r *chunkRepo) UploadChunk(req *pb.UploadChunkRequest, chunkBasicDir string) (*biz.Chunk, error) {
+	var uploading = biz.Uploading{}
+	err := r.data.DB.Open(biz.Uploading{Upid: req.Upid}).First().AsEntity(&uploading)
+	if err != nil {
+		log.Errorf("uploading找不到!%v", err)
+		return nil, err
+	}
+	if req.Num == uploading.CurrentNum+1 {
+		chunk := biz.Chunk{
+			Upid: req.Upid,
+			Num:  req.Num,
+			Size: req.Size,
+			Path: path.Join(chunkBasicDir, req.Upid, req.Upid+"."+fmt.Sprint(req.Num)),
+		}
+		r.data.DB.Insert(chunk)
+		uploading.CurrentNum = uploading.CurrentNum + 1
+		r.data.DB.Update(uploading)
+		f, err := os.OpenFile(path.Join(chunkBasicDir, req.Upid, req.Upid+"."+fmt.Sprint(req.Num)), os.O_CREATE|os.O_RDWR|os.O_APPEND, 0666)
+		if err != nil {
+			log.Errorf("failed to create new file!%v", err)
+			return nil, err
+		}
+		// copy stream to file
+		f.Write(req.Chunk)
+		return &chunk, nil
+	} else {
+		chunk := biz.Chunk{}
+		r.data.DB.Open(biz.Chunk{Upid: req.Upid}).Where("Num", "=", req.Num).First().AsEntity(&chunk)
 		return &chunk, nil
 	}
 }
@@ -108,11 +123,19 @@ func (r *chunkRepo) DoneUpload(req *pb.DoneUploadRequest, chunkBasicDir string) 
 	// 按upload_id查找分片信息:分片数
 	var uploading biz.Uploading
 	var chunks []biz.Chunk
-	r.data.DB.First(&uploading, "upid = ?", req.Upid)
+	err := r.data.DB.Open(biz.Uploading{Upid: req.Upid}).First().AsEntity(&uploading)
+	if err != nil {
+		fmt.Println("-----------uploading not found")
+		return nil, err
+	}
+	err = r.data.DB.Open(biz.Chunk{Upid: req.Upid}).Get().AsEntity(&chunks)
+	if err != nil {
+		fmt.Println("-----------chunk not found")
+		return nil, err
+	}
 	if uploading.CurrentNum == uploading.TotalCount && len(uploading.Path) != 0 {
 		return &uploading, nil
 	}
-	r.data.DB.Model(&uploading).Association("Chunks").Find(&chunks)
 	// 核对分片数
 	if int(uploading.TotalCount) != len(chunks) {
 		return nil, fmt.Errorf("分片总数错误, %v %v", uploading.TotalCount, len(chunks))
@@ -129,24 +152,58 @@ func (r *chunkRepo) DoneUpload(req *pb.DoneUploadRequest, chunkBasicDir string) 
 	}
 	finalName, _ := RecursiveMergeChunk(path.Join(chunkBasicDir, req.Upid), chunkFileNames...)
 	fmt.Println("finalName-----------------", finalName)
-	err = os.Rename(path.Join(chunkBasicDir, req.Upid, finalName), path.Join(chunkBasicDir, uploading.Filename))
+	err = os.Rename(path.Join(chunkBasicDir, req.Upid, finalName), path.Join(chunkBasicDir, "files", uploading.Upid))
 	if err != nil {
 		return nil, err
 	}
-	uploading = biz.Uploading{
-		Path: path.Join(chunkBasicDir, uploading.Filename),
-	}
-	r.data.DB.Model(&biz.Uploading{}).Where("upid = ?", req.Upid).Update("path", uploading.Path)
+	uploading.Path = path.Join(chunkBasicDir, uploading.Upid)
+	r.data.DB.Update(uploading)
 	return &uploading, nil
 }
 
-func (r *chunkRepo) FindUploader(filename string) (*biz.Uploading, error) {
+func (r *chunkRepo) FindUploadingByUpid(upid string) (*biz.Uploading, error) {
 	var uploading biz.Uploading
-	result := r.data.DB.First(&uploading, "Filename = ?", filename)
-	if result.Error != nil {
-		return nil, result.Error
+	err := r.data.DB.Open(biz.Uploading{Upid: upid}).First().AsEntity(&uploading)
+	if err != nil {
+		return nil, err
 	}
 	return &uploading, nil
+}
+func (r *chunkRepo) FindUploadingByFilename(filename, md5sum, chunkBasicDir string) (*biz.Uploading, error) {
+	// 按照给定的filename,md5sum在所有json文件中查找指定的uploading是否存在
+	entries, err := os.ReadDir(filepath.Join(chunkBasicDir, "index", "Uploading"))
+	if err != nil {
+		return nil, err
+	}
+	for _, entry := range entries {
+		up := biz.Uploading{}
+		if entry.IsDir() {
+			continue
+		}
+		f, err := os.Open(filepath.Join(chunkBasicDir, "index", "Uploading", entry.Name()))
+		if err != nil {
+			return nil, err
+		}
+		result, err := ioutil.ReadAll(f)
+		if err != nil {
+			return nil, err
+		}
+		array := make([]interface{}, 0)
+		err = json.Unmarshal(result, &array)
+		if len(array) == 0 || err != nil {
+			continue
+		}
+		result, err = json.Marshal(array[0])
+		if err != nil {
+			return nil, err
+		}
+		json.Unmarshal(result, &up)
+		if up.Filename == filename && up.MD5SUM == md5sum {
+			fmt.Println("uploading exists!", up.Filename, up.MD5SUM)
+			return &up, nil
+		}
+	}
+	return nil, fmt.Errorf("file not exists")
 }
 
 func RecursiveMergeChunk(chunkBasicDir string, chunkFileNames ...string) (finalName string, e error) {
