@@ -78,18 +78,13 @@ func (r *chunkRepo) CreateUpload(g *biz.Uploading, chunkBasicDir string) (*biz.U
 	}
 }
 
-func (r *chunkRepo) FindChunk(req *pb.UploadChunkRequest) (*biz.Chunk, *biz.Uploading, error) {
+func (r *chunkRepo) FindChunk(req *pb.UploadChunkRequest) (*biz.Chunk, error) {
 	var chunk biz.Chunk
-	var uploading biz.Uploading
-	err := r.data.DB.Open(biz.Uploading{Upid: req.Upid}).First().AsEntity(&uploading)
+	err := r.data.DB.Open(biz.Chunk{Upid: req.Upid}).Where("Num", "=", req.Num).First().AsEntity(&chunk)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	err = r.data.DB.Open(biz.Chunk{Upid: req.Upid}).Where("Num", "=", req.Num).First().AsEntity(&chunk)
-	if err != nil {
-		return nil, &uploading, err
-	}
-	return &chunk, &uploading, nil
+	return &chunk, nil
 }
 
 func (r *chunkRepo) UploadChunk(req *pb.UploadChunkRequest, chunkBasicDir string) (*biz.Chunk, error) {
@@ -118,7 +113,9 @@ func (r *chunkRepo) UploadChunk(req *pb.UploadChunkRequest, chunkBasicDir string
 		f.Write(req.Chunk)
 		return &chunk, nil
 	} else {
-		return nil, fmt.Errorf("........序号非法......%v:%v", uploading.CurrentNum, req.Num)
+		chunk := biz.Chunk{}
+		r.data.DB.Open(biz.Chunk{Upid: req.Upid}).Where("Num", "=", req.Num).First().AsEntity(&chunk)
+		return &chunk, nil
 	}
 }
 
@@ -206,7 +203,7 @@ func (r *chunkRepo) FindUploadingByFilename(filename, md5sum, chunkBasicDir stri
 			return &up, nil
 		}
 	}
-	return nil, fmt.Errorf("uploading目录为空")
+	return nil, fmt.Errorf("file not exists")
 }
 
 func RecursiveMergeChunk(chunkBasicDir string, chunkFileNames ...string) (finalName string, e error) {

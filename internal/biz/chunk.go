@@ -16,7 +16,7 @@ import (
 // ChunkRepo is a Greater repo.
 type ChunkRepo interface {
 	CreateUpload(*Uploading, string) (*Uploading, error)
-	FindChunk(*pb.UploadChunkRequest) (*Chunk, *Uploading, error)
+	FindChunk(*pb.UploadChunkRequest) (*Chunk, error)
 	UploadChunk(*pb.UploadChunkRequest, string) (*Chunk, error)
 	DoneUpload(*pb.DoneUploadRequest, string) (*Uploading, error)
 	FindUploadingByUpid(upid string) (*Uploading, error)
@@ -52,12 +52,11 @@ func (uc *ChunkUsecase) CreateUpload(req *pb.CreateUploadRequest) (*Uploading, e
 
 func (uc *ChunkUsecase) UploadChunk(ctx context.Context, req *pb.UploadChunkRequest) (int32, error) {
 	// find uploading
-	// TODO:改为FindChunk+FindUploading分别查找
 	uploading, _ := uc.repo.FindUploadingByUpid(req.Upid)
 	if uploading == nil {
 		return -1, fmt.Errorf("uploading不存在")
 	}
-	chunk, uploading, err := uc.repo.FindChunk(req)
+	chunk, err := uc.repo.FindChunk(req)
 	if err == nil {
 		log.Infof("chunk exists! %v", req.Upid)
 
@@ -69,7 +68,6 @@ func (uc *ChunkUsecase) UploadChunk(ctx context.Context, req *pb.UploadChunkRequ
 	}
 	chunk, err = uc.repo.UploadChunk(req, chunkBasicDir)
 	if err != nil {
-		log.Errorf("Failed to Upload chunk!%v", err)
 		return 0, err
 	}
 	if chunk.Num < uploading.TotalCount {
@@ -95,7 +93,7 @@ func (uc *ChunkUsecase) CheckFileExists(req *pb.CheckFileExistRequest) (string, 
 }
 
 func (uc *ChunkUsecase) CheckChunkExists(req *pb.CheckChunkExistsRequest) (bool, error) {
-	_, _, err := uc.repo.FindChunk(&v1.UploadChunkRequest{Upid: req.Upid, Num: req.Num})
+	_, err := uc.repo.FindChunk(&v1.UploadChunkRequest{Upid: req.Upid, Num: req.Num})
 	if err != nil {
 		return false, err
 	}

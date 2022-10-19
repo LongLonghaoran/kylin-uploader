@@ -4,14 +4,16 @@ import (
 	// v1 "kylin-uploader/api/helloworld/v1"
 
 	"context"
-	"fmt"
 	"io"
 	v1 "kylin-uploader/api/v1"
+	"kylin-uploader/internal/biz"
 	"kylin-uploader/internal/conf"
+	"kylin-uploader/internal/data/simdb"
 	"kylin-uploader/internal/service"
 	ghttp "net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"strconv"
 
 	"github.com/go-kratos/kratos/v2/errors"
@@ -76,7 +78,10 @@ func SendFile(ctx http.Context) error {
 	req := ctx.Request()
 	vars := mux.Vars(req)
 	w := ctx.Response()
-	fmt.Println("chunkbasic dir: ", chunkBasicDir)
+	up, err := FindUploadingByUpid(vars["path"])
+	if err != nil {
+		return err
+	}
 	f, _ := os.OpenFile(path.Join(chunkBasicDir, "files", vars["path"]), os.O_RDONLY, 0666)
 	fileHeader := make([]byte, 512) // 512 bytes is sufficient for http.DetectContentType() to work
 	f.Read(fileHeader)              // read the first 512 bytes from the updateFile
@@ -86,10 +91,22 @@ func SendFile(ctx http.Context) error {
 	w.Header().Set("Expires", "0")
 	w.Header().Set("Content-Transfer-Encoding", "binary")
 	w.Header().Set("Content-Control", "private, no-transform, no-store, must-revalidate")
-	w.Header().Set("Content-Disposition", "attachment; filename="+fileInfo.Name())
+	w.Header().Set("Content-Disposition", "attachment; filename="+up.Filename)
 	w.Header().Set("Content-Type", fileType)
 	w.Header().Set("Content-Length", strconv.FormatInt(fileSize, 10))
 	f.Seek(0, 0)
 	io.Copy(w, f)
 	return nil
+}
+func FindUploadingByUpid(upid string) (*biz.Uploading, error) {
+	driver, err := simdb.New(filepath.Join(chunkBasicDir, "index"))
+	if err != nil {
+		return nil, err
+	}
+	var uploading biz.Uploading
+	err = driver.Open(biz.Uploading{Upid: upid}).First().AsEntity(&uploading)
+	if err != nil {
+		return nil, err
+	}
+	return &uploading, nil
 }
