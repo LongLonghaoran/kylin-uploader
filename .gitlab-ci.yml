@@ -1,0 +1,63 @@
+stages:
+  - prepare
+  - build
+  - deploy
+
+define_env:
+  stage: prepare
+  script:
+    - oci_image_tags=`date '+%Y%m%d%H%M'`
+    - echo "BUILD_VARIABLE=$oci_image_tags" >> build.env
+  artifacts:
+    reports:
+      dotenv: build.env
+  tags:
+    - amd64-shell
+  only:
+    - master
+    - merge request
+
+build-amd64:
+  stage: build
+  script:
+    - echo "$BUILD_VERSION"
+    - image_url=harbor.kylinserver.top/devops/kylin-uploader-amd64:$BUILD_VARIABLE
+    - docker build -f Dockerfile -t $image_url .
+    - docker push $image_url
+  tags:
+    - amd64-shell
+  only:
+    - master
+    - merge request
+
+build-arm64:
+  stage: build
+  script:
+    - image_url=harbor.kylinserver.top/devops/kylin-uploader-arm64:$BUILD_VARIABLE
+    - docker build -f Dockerfile -t $image_url .
+    - docker push $image_url
+  tags:
+    - arm64-shell
+  only:
+    - master
+    - merge request
+
+
+render-manifest:
+  stage: deploy
+  script:
+    - cd /tmp && git clone https://gitlab.kylinserver.top/devops/kcc-apiserver-manifest.git && cd kcc-apiserver-manifest
+    - image_url=harbor.kylinserver.top/devops/kylin-uploader-amd64:$BUILD_VARIABLE yq e -i '.spec.template.spec.containers[0].image = strenv(image_url)' amd64/deployment.kylin-uploader.yaml
+    - image_url=harbor.kylinserver.top/devops/kylin-uploader-arm64:$BUILD_VARIABLE yq e -i '.spec.template.spec.containers[0].image = strenv(image_url)' arm64/deployment.kylin-uploader.yaml
+    - git config --global user.email "gitopser@kylinos.cn"
+    - git config --global user.name "gitopser"
+    - git remote set-url --push origin https://gitopser:sDkPwLugsSFP-B5ziPtw@gitlab.kylinserver.top/devops/kcc-apiserver-manifest.git
+    - git add .
+    - git commit -m "kylin-uploader"
+    - git push
+    - cd .. && rm -rf kcc-apiserver-manifest
+  tags:
+    - amd64-shell
+  only:
+    - master
+    - merge request
