@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"time"
 
 	pb "kylin-uploader/api/v1"
 	"kylin-uploader/internal/biz"
@@ -22,6 +23,7 @@ func NewChunkService(uc *biz.ChunkUsecase) *ChunkService {
 
 func (s *ChunkService) CreateUpload(ctx context.Context, req *pb.CreateUploadRequest) (*pb.CreateUploadReply, error) {
 	savedUploading, err := s.uc.CreateUpload(req)
+	fmt.Println(time.Now(), " 创建了Upload", savedUploading.Filename, savedUploading.MD5SUM)
 	if err != nil {
 		return nil, fmt.Errorf("创建失败! %v", err)
 	}
@@ -41,6 +43,7 @@ func (s *ChunkService) DoneUpload(ctx context.Context, req *pb.DoneUploadRequest
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println(time.Now(), "完成了Upload", uploading.Filename, uploading.MD5SUM)
 	r := url.URL{Host: os.Getenv("ENDPOINT"), Scheme: "http", Path: path.Join("files", uploading.Upid)}
 	return &pb.DoneUploadReply{
 		Path: r.String(),
