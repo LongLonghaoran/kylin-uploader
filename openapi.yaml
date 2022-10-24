@@ -23,7 +23,7 @@ paths:
                   description: 分片序号
                   schema:
                     type: integer
-                    format: int32
+                    format: int64
             responses:
                 "200":
                     description: OK
@@ -180,11 +180,11 @@ components:
                 totalCount:
                     type: integer
                     description: 总分片数
-                    format: int32
+                    format: int64
                 totalSize:
                     type: integer
                     description: 总容量
-                    format: int32
+                    format: int64
                 md5sum:
                     type: string
                     description: md5校验和
@@ -223,7 +223,7 @@ components:
             properties:
                 nextnum:
                     type: integer
-                    format: int32
+                    format: int64
         UploadChunkRequest:
             type: object
             properties:
@@ -233,11 +233,11 @@ components:
                 num:
                     type: integer
                     description: 当前块的序号
-                    format: int32
+                    format: int64
                 size:
                     type: integer
                     description: 当前块的大小
-                    format: int32
+                    format: int64
                 chunk:
                     type: string
                     description: 当前块的数据

@@ -47,9 +47,9 @@ message CreateUploadRequest {
 	// 文件名
 	string filename = 1;
 	// 总分片数
-	int32 total_count = 2;
+	int64 total_count = 2;
 	// 总容量
-	int32 total_size = 3;
+	int64 total_size = 3;
 	// md5校验和
 	string md5sum = 4;
 }
@@ -62,14 +62,14 @@ message UploadChunkRequest {
 	//上传的upid
 	string upid = 1; 
 	//当前块的序号
-	int32 num = 2; 
+	int64 num = 2; 
 	//当前块的大小
-	int32 size = 3; 
+	int64 size = 3; 
 	//当前块的数据
 	bytes chunk = 4; 
 }
 message UploadChunkReply {
-	int32  nextnum = 2;
+	int64  nextnum = 2;
 }
 
 message DoneUploadRequest {
@@ -97,7 +97,7 @@ message CheckChunkExistsRequest {
 	// 上传id
 	string upid = 1;
 	// 分片序号
-	int32 num = 2;
+	int64 num = 2;
 }
 message CheckChunkExistsReply {
 	bool exists = 1;

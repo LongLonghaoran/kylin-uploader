@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"strconv"
 
 	pb "kylin-uploader/api/v1"
-	v1 "kylin-uploader/api/v1"
 	"kylin-uploader/internal/conf"
 
 	"github.com/go-kratos/kratos/v2/log"
+	"github.com/go-kratos/kratos/v2/transport/http"
 	"github.com/google/uuid"
 )
 
@@ -17,7 +18,7 @@ import (
 type ChunkRepo interface {
 	CreateUpload(*Uploading, string) (*Uploading, error)
 	FindChunk(*pb.UploadChunkRequest) (*Chunk, error)
-	UploadChunk(*pb.UploadChunkRequest, string) (*Chunk, error)
+	UploadChunk(http.Context, *pb.UploadChunkRequest, string) (*Chunk, error)
 	DoneUpload(*pb.DoneUploadRequest, string) (*Uploading, error)
 	FindUploadingByUpid(upid string) (*Uploading, error)
 	FindUploadingByFilename(filename, md5sum, chunkBasicDir string) (*Uploading, error)
@@ -50,8 +51,20 @@ func (uc *ChunkUsecase) CreateUpload(req *pb.CreateUploadRequest) (*Uploading, e
 	return uc.repo.CreateUpload(&uploading, chunkBasicDir)
 }
 
-func (uc *ChunkUsecase) UploadChunk(ctx context.Context, req *pb.UploadChunkRequest) (int32, error) {
+func (uc *ChunkUsecase) UploadChunk(ctx http.Context, req *pb.UploadChunkRequest) (int64, error) {
 	// find uploading
+	num, err := strconv.Atoi(ctx.Query()["num"][0])
+	if err != nil {
+		fmt.Println("转换参数错误", err)
+		return -1, err
+	}
+	size, err := strconv.Atoi(ctx.Query()["size"][0])
+	if err != nil {
+		fmt.Println("转换参数错误", err)
+		return -1, err
+	}
+	req.Num = int64(num)
+	req.Size = int64(size)
 	uploading, _ := uc.repo.FindUploadingByUpid(req.Upid)
 	if uploading == nil {
 		return -1, fmt.Errorf("uploading不存在")
@@ -66,7 +79,7 @@ func (uc *ChunkUsecase) UploadChunk(ctx context.Context, req *pb.UploadChunkRequ
 			return -1, nil
 		}
 	}
-	chunk, err = uc.repo.UploadChunk(req, chunkBasicDir)
+	chunk, err = uc.repo.UploadChunk(ctx, req, chunkBasicDir)
 	if err != nil {
 		return 0, err
 	}
@@ -93,7 +106,7 @@ func (uc *ChunkUsecase) CheckFileExists(req *pb.CheckFileExistRequest) (string, 
 }
 
 func (uc *ChunkUsecase) CheckChunkExists(req *pb.CheckChunkExistsRequest) (bool, error) {
-	_, err := uc.repo.FindChunk(&v1.UploadChunkRequest{Upid: req.Upid, Num: req.Num})
+	_, err := uc.repo.FindChunk(&pb.UploadChunkRequest{Upid: req.Upid, Num: req.Num})
 	if err != nil {
 		return false, err
 	}

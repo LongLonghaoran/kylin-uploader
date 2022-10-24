@@ -4,6 +4,7 @@ import (
 	// v1 "kylin-uploader/api/helloworld/v1"
 
 	"context"
+	"fmt"
 	"io"
 	v1 "kylin-uploader/api/v1"
 	"kylin-uploader/internal/biz"
@@ -14,7 +15,9 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"strconv"
+	"strings"
 
 	"github.com/go-kratos/kratos/v2/errors"
 	"github.com/go-kratos/kratos/v2/log"
@@ -42,6 +45,33 @@ func Authenticate(m middleware.Handler) middleware.Handler {
 	}
 }
 
+func RequestDec(r *ghttp.Request, v interface{}) error {
+	typeName := strings.Split(reflect.TypeOf(v).String(), ".")[1]
+	if typeName == "UploadChunkRequest" {
+		// err := json.NewDecoder(r.Body).Decode(v)
+		// if err != nil {
+		// 	return errors.BadRequest("CODEC", fmt.Sprintf("body unmarshal %s", err.Error()))
+		// }
+	} else {
+		codec, ok := http.CodecForRequest(r, "Content-Type")
+		if !ok {
+			return errors.BadRequest("CODEC", fmt.Sprintf("unregister Content-Type: %s", r.Header.Get("Content-Type")))
+		}
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			return errors.BadRequest("CODEC", err.Error())
+		}
+		if len(data) == 0 {
+			return nil
+		}
+
+		if err = codec.Unmarshal(data, v); err != nil {
+			return errors.BadRequest("CODEC", fmt.Sprintf("body unmarshal %s", err.Error()))
+		}
+	}
+	return nil
+}
+
 // NewHTTPServer new a HTTP server.
 func NewHTTPServer(c *conf.Server, chunk *service.ChunkService, logger log.Logger) *http.Server {
 	var opts = []http.ServerOption{
@@ -61,6 +91,9 @@ func NewHTTPServer(c *conf.Server, chunk *service.ChunkService, logger log.Logge
 	}
 	opts = append(opts, http.Middleware(
 		Authenticate,
+	))
+	opts = append(opts, http.RequestDecoder(
+		RequestDec,
 	))
 	srv := http.NewServer(opts...)
 	// v1.RegisterGreeterHTTPServer(srv, greeter)

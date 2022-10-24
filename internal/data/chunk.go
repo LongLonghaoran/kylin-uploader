@@ -15,6 +15,7 @@ import (
 	pb "kylin-uploader/api/v1"
 
 	"github.com/go-kratos/kratos/v2/log"
+	"github.com/go-kratos/kratos/v2/transport/http"
 )
 
 type chunkRepo struct {
@@ -59,7 +60,7 @@ func (r *chunkRepo) CreateUpload(g *biz.Uploading, chunkBasicDir string) (*biz.U
 			return nil, err
 		}
 		json.Unmarshal(result, &up)
-		if up.Filename == g.Filename && up.MD5SUM == g.MD5SUM {
+		if up.MD5SUM == g.MD5SUM {
 			fmt.Println("uploading exists!", up.Filename, up.MD5SUM)
 			return &up, nil
 		}
@@ -87,7 +88,7 @@ func (r *chunkRepo) FindChunk(req *pb.UploadChunkRequest) (*biz.Chunk, error) {
 	return &chunk, nil
 }
 
-func (r *chunkRepo) UploadChunk(req *pb.UploadChunkRequest, chunkBasicDir string) (*biz.Chunk, error) {
+func (r *chunkRepo) UploadChunk(ctx http.Context, req *pb.UploadChunkRequest, chunkBasicDir string) (*biz.Chunk, error) {
 	var uploading = biz.Uploading{}
 	err := r.data.DB.Open(biz.Uploading{Upid: req.Upid}).First().AsEntity(&uploading)
 	if err != nil {
@@ -109,12 +110,19 @@ func (r *chunkRepo) UploadChunk(req *pb.UploadChunkRequest, chunkBasicDir string
 			log.Errorf("failed to create new file!%v", err)
 			return nil, err
 		}
+		w, err := io.Copy(f, ctx.Request().Body)
+		if err != nil {
+			log.Errorf("failed to create new file!%v", err)
+			return nil, err
+		}
 		// copy stream to file
-		f.Write(req.Chunk)
+		// f.Write(req.Chunk)
+		fmt.Println("已写入", w, "Bytes")
 		return &chunk, nil
 	} else {
+		// 否则返回下一个的序号
 		chunk := biz.Chunk{}
-		r.data.DB.Open(biz.Chunk{Upid: req.Upid}).Where("Num", "=", req.Num).First().AsEntity(&chunk)
+		r.data.DB.Open(biz.Chunk{Upid: req.Upid}).Where("Num", "=", uploading.CurrentNum).First().AsEntity(&chunk)
 		return &chunk, nil
 	}
 }

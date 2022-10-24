@@ -10,6 +10,8 @@ import (
 
 	pb "kylin-uploader/api/v1"
 	"kylin-uploader/internal/biz"
+
+	"github.com/go-kratos/kratos/v2/transport/http"
 )
 
 type ChunkService struct {
@@ -30,7 +32,7 @@ func (s *ChunkService) CreateUpload(ctx context.Context, req *pb.CreateUploadReq
 	return &pb.CreateUploadReply{UploadPath: "/api/v1/uploaders/" + savedUploading.Upid}, nil
 }
 func (s *ChunkService) UploadChunk(ctx context.Context, req *pb.UploadChunkRequest) (*pb.UploadChunkReply, error) {
-	nextNum, err := s.uc.UploadChunk(context.Background(), req)
+	nextNum, err := s.uc.UploadChunk(ctx.(http.Context), req)
 	if err != nil {
 		return nil, fmt.Errorf("上传失败!%v", err)
 	}
