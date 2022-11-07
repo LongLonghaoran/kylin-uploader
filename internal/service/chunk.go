@@ -59,9 +59,10 @@ func (s *ChunkService) CheckFileExists(ctx context.Context, req *pb.CheckFileExi
 			Path:   "",
 		}, nil
 	} else {
+		r := url.URL{Host: os.Getenv("ENDPOINT"), Scheme: "http", Path: path}
 		return &pb.CheckFileExistReply{
 			Exists: true,
-			Path:   path,
+			Path:   r.String(),
 		}, nil
 	}
 }
