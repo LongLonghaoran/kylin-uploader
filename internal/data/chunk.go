@@ -206,7 +206,7 @@ func (r *chunkRepo) FindUploadingByFilename(filename, md5sum, chunkBasicDir stri
 			return nil, err
 		}
 		json.Unmarshal(result, &up)
-		if up.MD5SUM == md5sum {
+		if up.MD5SUM == md5sum && up.CurrentNum == up.TotalCount {
 			fmt.Println("uploading exists!", up.Filename, up.MD5SUM)
 			return &up, nil
 		}
