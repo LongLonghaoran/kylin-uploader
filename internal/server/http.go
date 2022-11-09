@@ -105,9 +105,66 @@ func NewHTTPServer(c *conf.Server, chunk *service.ChunkService, logger log.Logge
 func RegisterFileServer(s *http.Server, srv v1.ChunkHTTPServer) {
 	r := s.Route("/")
 	r.GET("/files/{path}", SendFile)
+	r.HEAD("/files/{path}", SendFileMsg)
 }
 
 func SendFile(ctx http.Context) error {
+	req := ctx.Request()
+	br := req.Header["Range"]
+	if len(br) != 0 {
+		vars := mux.Vars(req)
+		w := ctx.Response()
+		up, err := FindUploadingByUpid(vars["path"])
+		if err != nil {
+			return err
+		}
+		f, _ := os.OpenFile(path.Join(chunkBasicDir, "files", vars["path"]), os.O_RDONLY, 0666)
+		fileHeader := make([]byte, 512) // 512 bytes is sufficient for http.DetectContentType() to work
+		f.Read(fileHeader)              // read the first 512 bytes from the updateFile
+		fileType := ghttp.DetectContentType(fileHeader)
+		w.Header().Set("Expires", "0")
+		w.Header().Set("Content-Transfer-Encoding", "binary")
+		w.Header().Set("Content-Control", "private, no-transform, no-store, must-revalidate")
+		w.Header().Set("Content-Disposition", "attachment; filename="+up.Filename)
+		w.Header().Set("Content-Type", fileType)
+		f.Seek(0, 0)
+		bytesRange := strings.Split(strings.Split(br[0], "=")[1], "-")
+		min, _ := strconv.ParseInt(bytesRange[0], 10, 64)
+		max, _ := strconv.ParseInt(bytesRange[1], 10, 64)
+		w.Header().Set("Content-Length", fmt.Sprint(max-min+1))
+		f.Seek(min, 0)
+		buf := make([]byte, max-min+1)
+		io.ReadFull(f, buf)
+		w.Write(buf)
+		defer f.Close()
+		return nil
+	} else {
+		vars := mux.Vars(req)
+		w := ctx.Response()
+		up, err := FindUploadingByUpid(vars["path"])
+		if err != nil {
+			return err
+		}
+		f, _ := os.OpenFile(path.Join(chunkBasicDir, "files", vars["path"]), os.O_RDONLY, 0666)
+		fileHeader := make([]byte, 512) // 512 bytes is sufficient for http.DetectContentType() to work
+		f.Read(fileHeader)              // read the first 512 bytes from the updateFile
+		fileType := ghttp.DetectContentType(fileHeader)
+		fileInfo, _ := f.Stat()
+		fileSize := fileInfo.Size()
+		w.Header().Set("Expires", "0")
+		w.Header().Set("Content-Transfer-Encoding", "binary")
+		w.Header().Set("Content-Control", "private, no-transform, no-store, must-revalidate")
+		w.Header().Set("Content-Disposition", "attachment; filename="+up.Filename)
+		w.Header().Set("Content-Type", fileType)
+		w.Header().Set("Content-Length", strconv.FormatInt(fileSize, 10))
+		f.Seek(0, 0)
+		io.Copy(w, f)
+		defer f.Close()
+		return nil
+	}
+}
+
+func SendFileMsg(ctx http.Context) error {
 	req := ctx.Request()
 	vars := mux.Vars(req)
 	w := ctx.Response()
@@ -127,8 +184,8 @@ func SendFile(ctx http.Context) error {
 	w.Header().Set("Content-Disposition", "attachment; filename="+up.Filename)
 	w.Header().Set("Content-Type", fileType)
 	w.Header().Set("Content-Length", strconv.FormatInt(fileSize, 10))
-	f.Seek(0, 0)
-	io.Copy(w, f)
+	w.Header().Set("Accept-Ranges", "bytes")
+	defer f.Close()
 	return nil
 }
 func FindUploadingByUpid(upid string) (*biz.Uploading, error) {
