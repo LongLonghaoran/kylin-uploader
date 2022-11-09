@@ -8,6 +8,9 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
+	"strconv"
+	"strings"
 	"sync"
 
 	"kylin-uploader/internal/biz"
@@ -158,7 +161,9 @@ func (r *chunkRepo) DoneUpload(req *pb.DoneUploadRequest, chunkBasicDir string) 
 			chunkFileNames = append(chunkFileNames, fi.Name())
 		}
 	}
-	finalName, _ := RecursiveMergeChunk(path.Join(chunkBasicDir, req.Upid), chunkFileNames...)
+	sortedChunkFileNames := fileNames(chunkFileNames)
+	sort.Sort(sortedChunkFileNames)
+	finalName, _ := RecursiveMergeChunk(path.Join(chunkBasicDir, req.Upid), sortedChunkFileNames...)
 	fmt.Println("finalName-----------------", finalName)
 	err = os.Rename(path.Join(chunkBasicDir, req.Upid, finalName), path.Join(chunkBasicDir, "files", uploading.Upid))
 	if err != nil {
@@ -167,6 +172,20 @@ func (r *chunkRepo) DoneUpload(req *pb.DoneUploadRequest, chunkBasicDir string) 
 	uploading.Path = path.Join(chunkBasicDir, uploading.Upid)
 	r.data.DB.Update(uploading)
 	return &uploading, nil
+}
+
+type fileNames []string
+
+func (m fileNames) Len() int {
+	return len(m)
+}
+func (m fileNames) Less(i, j int) bool {
+	n1, _ := strconv.Atoi(strings.Split(m[i], ".")[1])
+	n2, _ := strconv.Atoi(strings.Split(m[j], ".")[1])
+	return n1 < n2
+}
+func (m fileNames) Swap(i, j int) {
+	m[i], m[j] = m[j], m[i]
 }
 
 func (r *chunkRepo) FindUploadingByUpid(upid string) (*biz.Uploading, error) {
