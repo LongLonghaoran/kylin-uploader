@@ -234,6 +234,7 @@ func (r *chunkRepo) FindUploadingByFilename(filename, md5sum, chunkBasicDir stri
 }
 
 func RecursiveMergeChunk(chunkBasicDir string, chunkFileNames ...string) (finalName string, e error) {
+	fmt.Println("合并顺序:", chunkFileNames)
 	// var maxMem int64 = 1 * 1024 * 1024 * 1024 // max memery: 1GB
 	if len(chunkFileNames) == 1 {
 		return chunkFileNames[0], nil
@@ -265,6 +266,11 @@ func RecursiveMergeChunk(chunkBasicDir string, chunkFileNames ...string) (finalN
 				return
 			}
 			defer fw.Close()
+			if int(perTimes)*(j+1)-1 > len(chunkFileNames) {
+				fmt.Println("开始合并:", chunkFileNames[j*int(perTimes)], "到", chunkFileNames[len(chunkFileNames)-1])
+			} else {
+				fmt.Println("开始合并:", chunkFileNames[j*int(perTimes)], "到", chunkFileNames[int(perTimes)*(j+1)-1])
+			}
 			for k := j * int(perTimes); k < int(perTimes)*(j+1); k++ {
 				if k > int(len(chunkFileNames))-1 {
 					break
